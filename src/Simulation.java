@@ -1,6 +1,10 @@
 package src;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -31,6 +35,8 @@ public class Simulation {
     private ArrayList<Customer> customers;
     private Queue queue;
     private Random rand;
+    private int[] customerQty;
+    private int[] serviceTime;
     private int clock;
     private int ID;
     private int served;
@@ -41,8 +47,12 @@ public class Simulation {
 
     /**
      * Constructor method that creates a new simulation object and initializes every variable to its default value.
+     *
+     * @param qtyFile       path and filename for bank provided customer quantities
+     * @param timeFile      path and filename for bank provided services times
+     * @throws IOException  if file not found
      */
-    public Simulation() {
+    public Simulation(String qtyFile, String timeFile) throws IOException {
         this.customers = new ArrayList<>();
         this.queue = new Queue();
         this.rand = new Random();
@@ -53,15 +63,18 @@ public class Simulation {
         this.maxWait = 0;
         this.avgQueue = 0;
         this.maxQueue = 0;
+        this.customerQty = readDataFiles(qtyFile);
+        this.serviceTime = readDataFiles(timeFile);
     }
 
     /**
      * Main method that sets up four bank simulations for 3, 4, 5, and 6 tellers.
      *
-     * @param args  optional arguments that may be passed in
+     * @param args          optional arguments that may be passed in
+     * @throws IOException  if file not found
      */
-    public static void main(String[] args) {
-        Simulation sim = new Simulation();
+    public static void main(String[] args) throws IOException {
+        Simulation sim = new Simulation("src/proj2a.dat", "src/proj2b.dat");
 
         System.out.println("Data logged for 3 tellers:");
         sim.simulation(3);
@@ -106,10 +119,10 @@ public class Simulation {
         while (clock < 28800) {
             // Every 60 seconds add new customers to queue
             if (clock % 60 == 0) {
-                int numCustomers = getCustomers(rand.nextInt(99) + 1);
+                int numCustomers = getCustomers(customerQty, rand.nextInt(99) + 1);
 
                 for (int i = 0; i < numCustomers; i++) {
-                    queue.enqueue(++ID, clock, getServiceTime(rand.nextInt(99) + 1));
+                    queue.enqueue(++ID, clock, getServiceTime(serviceTime, rand.nextInt(99) + 1));
                 }
 
                 logQueue();
@@ -130,11 +143,6 @@ public class Simulation {
 
             clock++;
         }
-
-        // Used for debugging purposes
-//        for (int i = 0; i < customers.size(); i++) {
-//            System.out.println("Customer ID: " + customers.get(i).customerID + " -- Wait time: " + customers.get(i).waitTime);
-//        }
 
         // Add the end of simulation, generate and print log data
         generateLogData();
@@ -160,8 +168,8 @@ public class Simulation {
      */
     private void printLogData() {
         System.out.println("Total customers served: " + served);
-        System.out.println("Average wait time: " + avgWait + " seconds.");
-        System.out.println("Maximum wait time: " + maxWait + " seconds.");
+        System.out.println("Average wait time: " + avgWait / 60 + " minute(s) and " + avgWait % 60 + " second(s).");
+        System.out.println("Maximum wait time: " + maxWait / 60 + " minute(s) and " + maxWait % 60 + " second(s).");
         System.out.println("Average queue size: " + avgQueue);
         System.out.println("Maximum queue size: " + maxQueue);
     }
@@ -218,44 +226,70 @@ public class Simulation {
     /**
      * Returns a random number of customers generated from a random number.
      *
+     * @param arr   the array of customer sizes provided by the bank
      * @param seed  the random number fed to method
      * @return      the number of customers returned based off criteria
      */
-    private int getCustomers(int seed) {
-        if (seed >= 1 && seed <= 15)
-            return 0;
-        else if (seed >= 16 && seed <= 35)
-            return 1;
-        else if (seed >= 36 && seed <= 60)
-            return 2;
-        else if (seed >= 61 && seed <= 70)
-            return 3;
-        else
-            return 4;
+    private int getCustomers(int[] arr, int seed) {
+        int total = 0;
+
+        for (int i = 0; i < arr.length; i++) {
+            total += arr[i];
+
+            if (seed < total)
+                return i;
+        }
+
+        return arr.length - 1;
     }
 
     /**
      * Returns a random predefined service time generated from a random number.
      *
+     * @param arr   the array of customer service times provided by the bank
      * @param seed  the random number fed to the method
      * @return      the amount of service time in seconds
      */
-    private int getServiceTime(int seed) {
-        if (seed >= 1 && seed <= 10)
-            return 30;
-        else if (seed >= 11 && seed <= 15)
-            return 40;
-        else if (seed >= 16 && seed <= 25)
-            return 50;
-        else if (seed >= 26 && seed <= 35)
-            return 60;
-        else if (seed >= 36 && seed <= 50)
-            return 80;
-        else if (seed >= 51 && seed <= 75)
-            return 90;
-        else if (seed >= 76 && seed <= 85)
-            return 100;
-        else
-            return 110;
+    private int getServiceTime(int[] arr, int seed) {
+        int total = 0;
+
+        for (int i = 0; i < arr.length; i++) {
+            total += arr[i];
+
+            if (seed < total)
+                return i * 10;
+        }
+
+        return (arr.length - 1) * 10;
+    }
+
+    /**
+     * Reads customer provided data files into their arrays. These data files define the likelihood of
+     * a number of customers arriving at any given minute, and their service time.
+     *
+     * @param fileName      the path and filename of the customer data file
+     * @throws IOException  throws IO exception if file is not found
+     */
+    private int[] readDataFiles(String fileName) throws IOException {
+        List<String> listOfStrings = new ArrayList<String>();
+
+        BufferedReader br = new BufferedReader(new FileReader(fileName));
+
+        String line = br.readLine();
+
+        while (line != null) {
+            listOfStrings.add(line);
+            line = br.readLine();
+        }
+
+        br.close();
+
+        int[] arr = new int[listOfStrings.size()];
+
+        for (int i = 0; i < listOfStrings.size(); i++) {
+            arr[i] = Integer.parseInt(listOfStrings.get(i).split("\t")[1]);
+        }
+
+        return arr;
     }
 }
